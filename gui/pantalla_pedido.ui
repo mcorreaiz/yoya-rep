@@ -40,7 +40,7 @@
      </item>
     </layout>
    </widget>
-   <widget class="QCheckBox" name="checkBox">
+   <widget class="QCheckBox" name="checkbox_cobrar_plato">
     <property name="geometry">
      <rect>
       <x>20</x>

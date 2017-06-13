@@ -14,6 +14,64 @@ pantalla_programacion_ui    = uic.loadUiType(get_absolute_path("pantalla_program
 
 dialogo_agregar_producto_ui    = uic.loadUiType(get_absolute_path("dialogo_agregar_producto.ui"))
 
+class Sistema:
+    def __init__(self):
+        self.gui = GUI()
+
+        self.menu_file = "../db/menu"
+        self.menu = {}
+
+        self.leer_menu()
+        self.actualizar_tabla_menu()
+
+        self.__bind_signals()
+
+    def __bind_signals(self):
+        self.gui.pantalla_menu.guardar_menu_senal.connect(
+            self.guardar_menu
+        )
+
+        self.gui.pantalla_menu.actualizar_tabla_menu_senal.connect(
+            self.actualizar_tabla_menu
+        )
+
+        self.gui.pantalla_menu.actualizar_producto_senal.connect(
+            self.actualizar_producto
+        )
+
+    def leer_menu(self):
+        if not os.path.isfile(self.menu_file):
+            self.menu = {}
+            with open(self.menu_file, "wb") as arch:
+                pickle.dump(self.menu, arch)
+        with open(self.menu_file, "rb") as arch:
+            try:
+                self.menu = pickle.load(arch)
+            except:
+                self.menu = {}
+
+    def guardar_menu(self):
+        with open(self.menu_file, "wb") as arch:
+            pickle.dump(self.menu, arch)
+
+    def actualizar_producto(self, nombre, precio):
+        if precio:
+            self.menu[nombre] = precio
+        else:
+            del self.menu[nombre]
+
+    def actualizar_tabla_menu(self):
+        filas = self.gui.pantalla_menu.tabla_menu.rowCount()
+        self.gui.pantalla_menu.tabla_menu.clearContents()
+        k = 0
+        for i in self.menu:
+            if k >= filas:
+                self.gui.pantalla_menu.tabla_menu.insertRow(k)
+            self.gui.pantalla_menu.tabla_menu.setItem(k, 0, QtWidgets.QTableWidgetItem(i))
+            self.gui.pantalla_menu.tabla_menu.setItem(k, 1, QtWidgets.QTableWidgetItem(self.menu[i]))
+            k += 1
+        self.guardar_menu()
+
 class GUI:
     def __init__(self):
         self.version = "1.0"
@@ -100,19 +158,19 @@ class Pantalla_Inicial(*pantalla_inicial_ui):
 
 
 class Pantalla_Menu(*pantalla_menu_ui):
+    guardar_menu_senal          = QtCore.pyqtSignal()
+    actualizar_tabla_menu_senal = QtCore.pyqtSignal()
+    actualizar_producto_senal   = QtCore.pyqtSignal(str, str)
+
     def __init__(self):
         super().__init__()
         self.setupUi(self)
 
         self.dialogo_agregar_producto = Dialogo_Agregar_Producto()
-        self.menu_file = "../db/menu"
-        self.menu = {}
-        self.producto_nuevo = False
-        self.nombre_viejo = ""
-        self.precio_viejo = ""
+        self._producto_nuevo          = False
+        self._nombre_viejo            = ""
+        self._precio_viejo            = ""
 
-        self.leer_menu()
-        self.actualizar_tabla_menu()
         self.__bind_signals()
 
     def __bind_signals(self):
@@ -138,14 +196,15 @@ class Pantalla_Menu(*pantalla_menu_ui):
     def __dialogo_agregar_producto_accept(self):
         nombre = self.dialogo_agregar_producto.edit_nombre.text()
         precio = self.dialogo_agregar_producto.edit_precio.text()
-        if nombre in self.menu:
-            QMessageBox.critical(self, "Yoya", "Ese producto ya esta en el menu.\nPara editar un producto, haz doble click sobre el.")
-            return
+        # if nombre in self.menu:
+        #     QMessageBox.critical(self, "Yoya", "Ese producto ya esta en el menu.\nPara editar un producto, haz doble click sobre el.")
+        #     return
         if precio and nombre:
             if precio.isdigit():
-                self.agregar_producto(nombre, precio)
-                self.producto_nuevo = True
-                self.actualizar_tabla_menu()
+                self.actualizar_producto_senal.emit(nombre, precio)
+                self._producto_nuevo = True
+                self.actualizar_tabla_menu_senal.emit()
+                self._producto_nuevo = False
                 [i.setText("") for i in self.dialogo_agregar_producto.text_fields]
             else:
                 QMessageBox.critical(self, "Yoya", "El precio debe ser un numero.")
@@ -153,55 +212,27 @@ class Pantalla_Menu(*pantalla_menu_ui):
             QMessageBox.critical(self, "Yoya", "No pueden haber espacios vacios.")
 
     def __tabla_menu_dobleclick(self, row, col):
-        self.nombre_viejo = self.tabla_menu.item(row, 0).data(0)
-        self.precio_viejo = self.tabla_menu.item(row, 1).data(0)
+        self._nombre_viejo = self.tabla_menu.item(row, 0).data(0)
+        self._precio_viejo = self.tabla_menu.item(row, 1).data(0)
 
     def __tabla_menu_change(self, row, col):
-        if not self.producto_nuevo:
+        if not self._producto_nuevo:
             nombre = self.tabla_menu.item(row, 0).data(0)
-            precio = self.tabla_menu.item(row, 1).data(0)
+            try:
+                precio = self.tabla_menu.item(row, 1).data(0)
+            except:
+                precio = "0"
             if nombre and precio:
-                self.menu[nombre] = precio
+                self.actualizar_producto_senal.emit(nombre, precio)
                 if not col: # cambio un nombre
-                    del self.menu[self.nombre_viejo]
-                self.guardar_menu()
+                    self.actualizar_producto_senal.emit(self._nombre_viejo, "")
+                self.guardar_menu_senal.emit()
             else:
                 QMessageBox.critical(self, "Yoya", "No pueden haber espacios vacios.")
                 if col:
-                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self.precio_viejo))
+                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self._precio_viejo))
                 else:
-                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self.nombre_viejo))
-
-    def leer_menu(self):
-        if not os.path.isfile(self.menu_file):
-            self.menu = {}
-            with open(self.menu_file, "wb") as arch:
-                pickle.dump(self.menu, arch)
-        with open(self.menu_file, "rb") as arch:
-            try:
-                self.menu = pickle.load(arch)
-            except:
-                self.menu = {}
-
-    def guardar_menu(self):
-        with open(self.menu_file, "wb") as arch:
-            pickle.dump(self.menu, arch)
-
-    def agregar_producto(self, nombre, precio):
-        self.menu[nombre] = precio
-
-    def actualizar_tabla_menu(self):
-        filas = self.tabla_menu.rowCount()
-        self.tabla_menu.clearContents()
-        k = 0
-        for i in self.menu:
-            if k >= filas:
-                self.tabla_menu.insertRow(k)
-            self.tabla_menu.setItem(k, 0, QtWidgets.QTableWidgetItem(i))
-            self.tabla_menu.setItem(k, 1, QtWidgets.QTableWidgetItem(self.menu[i]))
-            k += 1
-        self.producto_nuevo = False
-        self.guardar_menu()
+                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self._nombre_viejo))
 
 
 class Pantalla_Pedido(*pantalla_pedido_ui):
@@ -221,6 +252,7 @@ class Pantalla_Programacion(*pantalla_programacion_ui):
         super().__init__()
         self.setupUi(self)
 
+
 class Dialogo_Agregar_Producto(*dialogo_agregar_producto_ui):
     def __init__(self):
         super().__init__()
@@ -235,5 +267,5 @@ class Dialogo_Agregar_Producto(*dialogo_agregar_producto_ui):
 if __name__ == "__main__":
 
     app = QApplication([])
-    gui = GUI()
+    sist = Sistema()
     app.exec_()

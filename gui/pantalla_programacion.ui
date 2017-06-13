@@ -24,7 +24,7 @@
      </rect>
     </property>
     <property name="currentIndex">
-     <number>1</number>
+     <number>0</number>
     </property>
     <widget class="QWidget" name="tab_dia">
      <attribute name="title">
@@ -76,6 +76,11 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <tabstops>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>boton_exportar</tabstop>
+  <tabstop>boton_volver</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

@@ -52,6 +52,9 @@
     <property name="text">
      <string>Cobrar plato</string>
     </property>
+    <property name="tristate">
+     <bool>false</bool>
+    </property>
    </widget>
    <widget class="QWidget" name="horizontalLayoutWidget_2">
     <property name="geometry">
@@ -75,6 +78,9 @@
      </item>
      <item>
       <widget class="QLabel" name="label_total_precio">
+       <property name="frameShape">
+        <enum>QFrame::NoFrame</enum>
+       </property>
        <property name="text">
         <string/>
        </property>
@@ -82,7 +88,7 @@
      </item>
     </layout>
    </widget>
-   <widget class="QTableWidget" name="tableWidget">
+   <widget class="QTableWidget" name="tabla_pedidos">
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -106,6 +112,9 @@
     <property name="sortingEnabled">
      <bool>true</bool>
     </property>
+    <attribute name="horizontalHeaderStretchLastSection">
+     <bool>false</bool>
+    </attribute>
     <attribute name="verticalHeaderVisible">
      <bool>false</bool>
     </attribute>
@@ -117,6 +126,11 @@
     <column>
      <property name="text">
       <string>Cantidad</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>Subtotal</string>
      </property>
     </column>
    </widget>

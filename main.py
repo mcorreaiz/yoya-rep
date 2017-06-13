@@ -1,5 +1,4 @@
-from gui import GUI
-from PyQt5 import QtCore, QtGui
+from gui import Sistema
 from PyQt5.QtWidgets import QApplication
 
 
@@ -7,6 +6,6 @@ from PyQt5.QtWidgets import QApplication
 if __name__ == "__main__":
 
     app = QApplication([])
-    gui = GUI()
-    # main(gui)
+    sist = Sistema()
+    # main(sist)
     app.exec_()

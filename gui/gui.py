@@ -14,12 +14,15 @@ pantalla_programacion_ui    = uic.loadUiType(get_absolute_path("pantalla_program
 
 dialogo_agregar_producto_ui    = uic.loadUiType(get_absolute_path("dialogo_agregar_producto.ui"))
 
+
 class Sistema:
     def __init__(self):
-        self.gui = GUI()
+        self.gui          = GUI()
 
-        self.menu_file = "../db/menu"
-        self.menu = {}
+        self.pedidos_file = "../db/pedidos"
+        self.menu_file    = "../db/menu"
+        self.pedidos      = {}
+        self.menu         = {}
 
         self.leer_menu()
         self.actualizar_tabla_menu()
@@ -39,6 +42,14 @@ class Sistema:
             self.actualizar_producto
         )
 
+        self.gui.pantalla_pedido.poblar_caja_senal.connect(
+            self.poblar_caja_pedido
+        )
+
+        self.gui.pantalla_pedido.tabla_pedidos_senal.connect(
+            self.tabla_pedidos_change
+        )
+
     def leer_menu(self):
         if not os.path.isfile(self.menu_file):
             self.menu = {}
@@ -56,7 +67,7 @@ class Sistema:
 
     def actualizar_producto(self, nombre, precio):
         if precio:
-            self.menu[nombre] = precio
+            self.menu[nombre] = int(precio)
         else:
             del self.menu[nombre]
 
@@ -68,9 +79,25 @@ class Sistema:
             if k >= filas:
                 self.gui.pantalla_menu.tabla_menu.insertRow(k)
             self.gui.pantalla_menu.tabla_menu.setItem(k, 0, QtWidgets.QTableWidgetItem(i))
-            self.gui.pantalla_menu.tabla_menu.setItem(k, 1, QtWidgets.QTableWidgetItem(self.menu[i]))
+            self.gui.pantalla_menu.tabla_menu.setItem(k, 1, QtWidgets.QTableWidgetItem("a"))
+            self.gui.pantalla_menu.tabla_menu.item(k, 1).setData(0, QtCore.QVariant(int(self.menu[i])))
             k += 1
         self.guardar_menu()
+
+    def poblar_caja_pedido(self, caja):
+        caja.addItems(("---", *self.menu.keys()))
+
+    def tabla_pedidos_change(self, row):
+        tabla = self.gui.pantalla_pedido.tabla_pedidos
+        nombre = tabla.cellWidget(row, 0).currentText()
+        if nombre != "---":
+            precio = self.menu[nombre]
+            cantidad = tabla.cellWidget(row, 1).value()
+            subtotal = precio * cantidad
+            tabla.item(row, 2).setData(0, QtCore.QVariant(int(subtotal)))
+        else:
+            tabla.item(row, 2).setData(0, "0")
+
 
 class GUI:
     def __init__(self):
@@ -157,10 +184,12 @@ class Pantalla_Inicial(*pantalla_inicial_ui):
         self.setupUi(self)
 
 
+#TODO chequear validez de la informacion en Sistema y spawnear msjes desde ahi.
+#TODO usar itemChanged en vez de cellChanged
 class Pantalla_Menu(*pantalla_menu_ui):
     guardar_menu_senal          = QtCore.pyqtSignal()
     actualizar_tabla_menu_senal = QtCore.pyqtSignal()
-    actualizar_producto_senal   = QtCore.pyqtSignal(str, str)
+    actualizar_producto_senal   = QtCore.pyqtSignal(str, int)
 
     def __init__(self):
         super().__init__()
@@ -201,6 +230,7 @@ class Pantalla_Menu(*pantalla_menu_ui):
         #     return
         if precio and nombre:
             if precio.isdigit():
+                precio = int(precio)
                 self.actualizar_producto_senal.emit(nombre, precio)
                 self._producto_nuevo = True
                 self.actualizar_tabla_menu_senal.emit()
@@ -213,7 +243,7 @@ class Pantalla_Menu(*pantalla_menu_ui):
 
     def __tabla_menu_dobleclick(self, row, col):
         self._nombre_viejo = self.tabla_menu.item(row, 0).data(0)
-        self._precio_viejo = self.tabla_menu.item(row, 1).data(0)
+        self._precio_viejo = int(self.tabla_menu.item(row, 1).data(0))
 
     def __tabla_menu_change(self, row, col):
         if not self._producto_nuevo:
@@ -221,24 +251,74 @@ class Pantalla_Menu(*pantalla_menu_ui):
             try:
                 precio = self.tabla_menu.item(row, 1).data(0)
             except:
-                precio = "0"
+                precio = "a"
             if nombre and precio:
                 self.actualizar_producto_senal.emit(nombre, precio)
                 if not col: # cambio un nombre
-                    self.actualizar_producto_senal.emit(self._nombre_viejo, "")
+                    self.actualizar_producto_senal.emit(self._nombre_viejo, 0)
                 self.guardar_menu_senal.emit()
             else:
                 QMessageBox.critical(self, "Yoya", "No pueden haber espacios vacios.")
                 if col:
-                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self._precio_viejo))
+                    self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem("a"))
+                    self.tabla_menu.item(row, col).setData(0, QtCore.QVariant(int(self._precio_viejo)))
                 else:
                     self.tabla_menu.setItem(row, col, QtWidgets.QTableWidgetItem(self._nombre_viejo))
 
 
+#TODO: Actualizar total y resetear la pantalla pedidos al volver
 class Pantalla_Pedido(*pantalla_pedido_ui):
+    poblar_caja_senal = QtCore.pyqtSignal(QtWidgets.QComboBox)
+    tabla_pedidos_senal = QtCore.pyqtSignal(int)
+
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+
+        self.precio_plato           = 3000
+        self.total                  = 0
+
+        self.__bind_signals()
+        self.label_total_precio.setText("0")
+
+    def __bind_signals(self):
+        self.checkbox_cobrar_plato.stateChanged.connect(
+            self.__checkbox_cobrar_plato_stateChange
+        )
+
+        self.boton_pedido_agregar.clicked.connect(
+            self.__boton_pedido_agregar_click
+        )
+
+    def __checkbox_cobrar_plato_stateChange(self):
+        if self.checkbox_cobrar_plato.isChecked():
+            self.actualizar_total(self.precio_plato)
+        else:
+            self.actualizar_total(-self.precio_plato)
+
+    def __boton_pedido_agregar_click(self):
+        fila = self.tabla_pedidos.rowCount()
+        self.tabla_pedidos.insertRow(fila)
+
+        caja = QtWidgets.QComboBox()
+        self.poblar_caja_senal.emit(caja)
+        self.tabla_pedidos.setCellWidget(fila, 0, caja)
+        caja.activated.connect(
+            lambda: self.tabla_pedidos_senal.emit(fila)
+        )
+
+        spinbox = QtWidgets.QSpinBox()
+        self.tabla_pedidos.setCellWidget(fila, 1, spinbox)
+        spinbox.valueChanged.connect(
+            lambda: self.tabla_pedidos_senal.emit(fila)
+        )
+
+        self.tabla_pedidos.setItem(fila, 2, QtWidgets.QTableWidgetItem("0"))
+        self.tabla_pedidos.item(fila, 2).setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+    def actualizar_total(self, subtotal):
+        self.total += subtotal
+        self.label_total_precio.setText(str(self.total))
 
 
 class Pantalla_Estadisticas(*pantalla_estadisticas_ui):
